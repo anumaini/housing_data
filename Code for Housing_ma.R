@@ -1,7 +1,3 @@
-
-#Trying the Changes21
-#Trial for changes to Commit 
-
 #load the data 
 housing_data <- read.csv(file.choose(), header=T)
 
@@ -49,5 +45,3 @@ unique(housing_data[,9:18])
 #### Managerial Questions
 #Can we use remaining data to predict application status- Machine learning/ Model based?
   
-  
-#Trial for changes to Commit 

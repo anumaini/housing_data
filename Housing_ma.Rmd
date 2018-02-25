@@ -4,6 +4,18 @@ author: "Anubhav Maini"
 date: "February 21, 2018"
 output: html_document
 ---
+Anubhav Maini, Eric Moyal, Monica Katoch, Harshil Dwivedi
+Marketing Analytics
+Professor Ranjan
+February 21, 2018
+
+New York Mortgage Decisions 
+
+The data problem is what variables are necessary to predict mortgage decisions based on the variables provided in “ny_hmda_2015.csv” such as race, gender, and income. The managerial objective is to obtain an accurate model to predict the outcome of mortgage decisions. The measurement types of each variable are shown in the following table. 
+
+
+
+
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
