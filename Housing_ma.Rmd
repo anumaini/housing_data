@@ -179,11 +179,11 @@ ggplot(housing_data_agg, aes(applicant_income_000s, loan_amount_000s)) + geom_po
 
 ```
 
-7. We now understand how the data is spread out on the basis of income, gender, loan amount and ethnicity. We can make some assumptions such as Unfortunately, making assumptions about the probability of the getting the loan approved will require more advanced techniques such as creating models- both linear and r.part based, creating predictions, using bootstrapping techniques to improve these predictions. What we do know is the important variables especially those in the code called ratio(ratio variables). 
+7. We now understand how the data is spread out on the basis of income, gender, loan amount and ethnicity. Making assumptions about the probability of the getting the loan approved will require more advanced techniques such as creating models- both linear and r.part based, creating predictions, using bootstrapping techniques to improve these predictions. What we do know is the important variables especially those in the code called ratio(ratio variables). 
 
 
 
-We also know that we can group various collumns. Below is the assessment and the framework for the next step of predictions. This is just an example of how we will asses this data for creating predictive models and create them in the next submission. (only visible in R Markdown file)
+We also know that we can group various collumns. Below are the assessment and the framework for the next step of predictions. This is just an example of how we will asses this data for creating predictive models and create them in the next submission. (only visible in R Markdown file)
 ```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE, paged.print=TRUE}
 ### After studying the overall data we need to disect each variable and learn more in groups
 
