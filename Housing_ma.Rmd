@@ -1,5 +1,5 @@
 ---
-title: "ma_housing"
+title: "nyc_housing"
 author: "Anubhav Maini"
 date: "February 21, 2018"
 output: html_document
@@ -8,6 +8,7 @@ Anubhav Maini, Eric Moyal, Monica Katoch, Harshil Dwivedi
 Marketing Analytics
 Professor Ranjan
 February 21, 2018
+Git Link- https://github.com/anumaini/housing_data
 
 New York Mortgage Decisions 
 
@@ -16,6 +17,12 @@ The data problem is what variables are necessary to predict mortgage decisions b
 2. Here's how we assessed the dataset: 
 
 ```{r eval=FALSE, include=FALSE}
+
+housing_data <- read.csv(file.choose(), header=T)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+
 #Understanding the Data 
 names(housing_data)
 summary(housing_data)
@@ -28,7 +35,6 @@ Using sapply to assess class of data and creating a data frame for future refere
 #Understanding classes of all variables 
 
 Variable_names <- data.frame(sapply(housing_data, class))
-library(dplyr)
 Variable_names <- rename(Variable_names, data_class= sapply.housing_data..class.)
 Variable_names$num <- 1:78
 print(Variable_names)
@@ -37,7 +43,6 @@ print(Variable_names)
 Understanding levels for factor type variables in the data set: 
 
 ```{r}
-library(dplyr)
 Variable_factor <- Variable_names%>% filter(data_class == "factor") 
 factor <- Variable_factor$num
 ```
@@ -93,10 +98,6 @@ colnames(housing_data) <- Variables
 5. Assesing the variables using data vasualization techniques- 
 
 ```{r}
-library(dplyr)
-library(ggplot2)
-library(tidyr)
-
 #gender filter
 housing_data_filtered <- filter(housing_data,applicant_sex_name =="Male" | applicant_sex_name == "Female") %>% 
   droplevels()
@@ -133,33 +134,42 @@ ggplot(housing_data_loan, aes(loan_type_name, loan_count)) +
   geom_bar(stat = 'identity') + ggtitle("Histogram of Loan Type")+xlab("Loan Type")+ylab("Frequency")
 
 ```
+Key Insights: 
+
+a) There are almost twice as many male applicants than female applicants 
+b) Significantly lower Hispanic or Latino Applicants in the pool( these only factor those who disclosed)
+c) Conventional Loan applications are the highest followed by FHA insured, VA-guaranteed, and FSA/RHS guaranteed 
 
 6. Bivariate frequency distributions (tables or plots) for key variables
 
 ```{r}
 #frequency table for loan type and ethnicity
-factor(housing_data_filtered$applicant_ethnicity_name)
-FreqTable = table(housing_data_filtered$applicant_ethnicity_name,housing_data_filtered$loan_type_name)
-plot(FreqTable)
+head(factor(housing_data_filtered$applicant_ethnicity_name))
+FreqTable <- table(housing_data_filtered$applicant_ethnicity_name,housing_data_filtered$loan_type_name)
+plot(FreqTable, las = 2)
 
-#frequency table for loan type and gender
-#todo
-
+## We understand the distribution of data basis ethnicity and loan type. Conventional non Hispanic or Latino applicants are the largest in this data set. Other three loan types follow suit as per the bi-variate Frequecy table. 
 
 # to observe the relation between loan amount and applicant's income
 plot(housing_data_filtered$loan_amount_000s ~ housing_data_filtered$applicant_income_000s, main="Scatterplot of loan amount and applicant's income",xlab="Income(in thousands)",ylab="Loan Amount(in thousands)")
 
-# bivariate plot for relationship between applicant's income (mean) 
-# and loan amount (mean) by loan type
+#As you can observe that there is a higher concentration of lower loan amounts as a factor of lower income. Although there are instances where the loan amounts for the same income are higher/audacious(in the real world), these outliers make a small portion of the data.   
+
+# bivariate plot for relationship between applicant's income (mean) and loan amount (mean) by loan type
 housing_data_agg <- aggregate(housing_data_filtered, list(housing_data_filtered$loan_type_name), mean, na.rm=TRUE)
 ggplot(housing_data_agg, aes(applicant_income_000s, loan_amount_000s)) + geom_point() +
   geom_text(aes(label=housing_data_agg$Group.1))
 
+#on working with averages for loan amount and income and factoring the loan type, we notice that conventional loan averages as a factor of mean income and loan are diagnoally dispered in the graph when compared to HS guarenteed. This means that the HS guarenteed applicants have lesser incomes and also apply for lower loan amounts, which in the real word makes sense. We can draw conclusions accordingly for the other two as they lie in between these plots. 
+
 # bivariate plot for relationship between applicant's income (mean) 
 # and loan amount (mean) by ethnicity
 housing_data_agg <- aggregate(housing_data_filtered, list(housing_data_filtered$applicant_ethnicity_name), mean, na.rm=TRUE)
+
 ggplot(housing_data_agg, aes(applicant_income_000s, loan_amount_000s)) + geom_point() +
   geom_text(aes(label=housing_data_agg$Group.1))
+
+#on doing a similar analysis as above between income and loans on the basis of ethnicity, we learn that those applicants who identify as Hispanic or Latino have lower incomes and apply for high loan amounts. The contrary is observed for those who did not identify with this ethnicity.
 
 ```
 
@@ -173,8 +183,6 @@ ggplot(housing_data_agg, aes(applicant_income_000s, loan_amount_000s)) + geom_po
 
 
 7. 
-
-Conclusion
 
 
 

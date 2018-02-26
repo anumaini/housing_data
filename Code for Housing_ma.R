@@ -141,29 +141,30 @@ ggplot(housing_data_loan, aes(loan_type_name, loan_count)) +
 #Q6
 
 #frequency table for loan type and ethnicity
-factor(df_filtered$applicant_ethnicity_name)
-FreqTable = table(df_filtered$applicant_ethnicity_name,df_filtered$loan_type_name)
-plot(FreqTable)
+factor(housing_data_filtered$applicant_ethnicity_name)
+FreqTable = table(housing_data_filtered$applicant_ethnicity_name,housing_data_filtered$loan_type_name)
+plot(FreqTable, las = 2)
 
+?par
 #frequency table for loan type and gender
 #todo
 
 
 # to observe the relation between loan amount and applicant's income
-plot(df_filtered$loan_amount_000s ~ df_filtered$applicant_income_000s, main="Scatterplot of loan amount and applicant's income",xlab="Income(in thousands)",ylab="Loan Amount(in thousands)")
+plot(housing_data_filtered$loan_amount_000s ~ housing_data_filtered$applicant_income_000s, main="Scatterplot of loan amount and applicant's income",xlab="Income(in thousands)",ylab="Loan Amount(in thousands)", las= 2)
 
 # bivariate plot for relationship between applicant's income (mean) 
 # and loan amount (mean) by loan type
-df_agg <- aggregate(df_filtered, list(df_filtered$loan_type_name), mean, na.rm=TRUE)
-ggplot(df_agg, aes(applicant_income_000s, loan_amount_000s)) + geom_point() +
-  geom_text(aes(label=df_agg$Group.1))
+housing_data_agg <- aggregate(housing_data_filtered, list(housing_data_filtered$loan_type_name), mean, na.rm=TRUE)
+ggplot(housing_data_agg, aes(applicant_income_000s, loan_amount_000s)) + geom_point() +
+  geom_text(aes(label=housing_data_agg$Group.1))
 
 # bivariate plot for relationship between applicant's income (mean) 
 # and loan amount (mean) by ethnicity
-df_agg <- aggregate(df_filtered, list(df_filtered$applicant_ethnicity_name), mean, na.rm=TRUE)
-ggplot(df_agg, aes(applicant_income_000s, loan_amount_000s)) + geom_point() +
-  geom_text(aes(label=df_agg$Group.1))
+housing_data_agg <- aggregate(housing_data_filtered, list(housing_data_filtered$applicant_ethnicity_name), mean, na.rm=TRUE)
+ggplot(housing_data_agg, aes(applicant_income_000s, loan_amount_000s)) + geom_point() +
+  geom_text(aes(label=housing_data_agg$Group.1))
 
 
-
+pairs(housing_data[,ratio])
 
