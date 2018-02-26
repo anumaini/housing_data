@@ -11,32 +11,170 @@ February 21, 2018
 
 New York Mortgage Decisions 
 
-The data problem is what variables are necessary to predict mortgage decisions based on the variables provided in “ny_hmda_2015.csv” such as race, gender, and income. The managerial objective is to obtain an accurate model to predict the outcome of mortgage decisions. The measurement types of each variable are shown in the following table. 
+The data problem is what variables are necessary to predict mortgage decisions based on the variables provided in “ny_hmda_2015.csv” such as race, gender, and income. The managerial objective is to obtain an accurate model to predict the outcome of mortgage decisions. Further, we can assess which variables are more pertinent to make this assessment. 
 
+2. Here's how we assessed the dataset: 
 
-
-
-
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r eval=FALSE, include=FALSE}
+#Understanding the Data 
+names(housing_data)
+summary(housing_data)
+str(housing_data)
 ```
 
-## R Markdown
+Using sapply to assess class of data and creating a data frame for future reference. 
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+```{r}
+#Understanding classes of all variables 
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+Variable_names <- data.frame(sapply(housing_data, class))
+library(dplyr)
+Variable_names <- rename(Variable_names, data_class= sapply.housing_data..class.)
+Variable_names$num <- 1:78
+print(Variable_names)
 ```
 
-## Including Plots
+Understanding levels for factor type variables in the data set: 
 
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+library(dplyr)
+Variable_factor <- Variable_names%>% filter(data_class == "factor") 
+factor <- Variable_factor$num
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+The table Variable_names explains what each variable type is. And those variables with factors/levels are explained in table Variable_factors.    
+
+3. Now, we move on to understand the statistics of Data:
+
+```{r}
+ratio <- c(8, 23, 71, 72, 73, 74,75,76,78) #these are Ratio Variables
+#inspecting and learning about ratio variables 
+variable_stat <- data.frame(summary(housing_data[, ratio], na.rm=TRUE))
+
+#Inspecting IQR's
+
+IQR(housing_data$applicant_income_000s, na.rm=TRUE)
+IQR(housing_data$applicant_income_000s, na.rm=TRUE)
+IQR(housing_data$census_tract_number, na.rm=TRUE)
+IQR(housing_data$hud_median_family_income, na.rm=TRUE)
+IQR(housing_data$loan_amount_000s, na.rm=TRUE)
+IQR(housing_data$number_of_1_to_4_family_units, na.rm=TRUE)
+IQR(housing_data$number_of_owner_occupied_units, na.rm=TRUE)
+IQR(housing_data$minority_population, na.rm=TRUE)
+IQR(housing_data$population, na.rm=TRUE)
+IQR(housing_data$tract_to_msamd_income, na.rm=TRUE)
+
+#Inspecting SD's
+sd(housing_data$applicant_income_000s, na.rm=TRUE)
+sd(housing_data$census_tract_number, na.rm=TRUE)
+sd(housing_data$hud_median_family_income, na.rm=TRUE)
+sd(housing_data$loan_amount_000s, na.rm=TRUE)
+sd(housing_data$number_of_1_to_4_family_units, na.rm=TRUE)
+sd(housing_data$number_of_owner_occupied_units, na.rm=TRUE)
+sd(housing_data$minority_population, na.rm=TRUE)
+sd(housing_data$population, na.rm=TRUE)
+sd(housing_data$tract_to_msamd_income, na.rm=TRUE)
+
+```
+
+4. We handled missing data in two ways: 
+
+For data that was missing, we added na.rm=TRUE to the IQR() and sd() methods. This omits the data from the calculation so the method can accurately calculate the interquartile range and standard deviations. 
+
+Also, we can convert blanks to NA in the entire data set at the beginning of the beggining of the assessment. 
+
+```{r}
+Variables <- variable.names(housing_data) # converting all variable names to  
+housing_data <- data.frame(ifelse(housing_data %in% c(""," ","NA"), NA, housing_data))#Treating blanks and reconverting list to Data Frame 
+# renaming the strings
+colnames(housing_data) <- Variables  
+```
+
+5. Assesing the variables using data vasualization techniques- 
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+
+#gender filter
+housing_data_filtered <- filter(housing_data,applicant_sex_name =="Male" | applicant_sex_name == "Female") %>% 
+  droplevels()
+
+#ethnicity filter
+housing_data_filtered <- filter(housing_data_filtered,
+                      applicant_ethnicity_name == "Not Hispanic or Latino" | 
+                        applicant_ethnicity_name == "Hispanic or Latino") %>% 
+  droplevels()
+
+
+#histogram of gender
+housing_data_gender <- housing_data_filtered %>% 
+  group_by(applicant_sex_name) %>%
+  summarise(gender_count = n()) 
+
+ggplot(housing_data_gender, aes(applicant_sex_name, gender_count)) +
+  geom_bar(stat = 'identity') +ggtitle("Histogram of Gender")+xlab("Gender")+ylab("Frequency")
+
+#histogram of ethnicity
+housing_data_ethnicity <- housing_data_filtered %>% 
+  group_by(applicant_ethnicity_name) %>%
+  summarise(ethnicity_count = n()) 
+
+ggplot(housing_data_ethnicity, aes(applicant_ethnicity_name, ethnicity_count))+
+  geom_bar(stat = 'identity') + ggtitle("Histogram of Ethnicity")+xlab("Ethnicity")+ylab("Frequency")
+
+#histogram by loan type
+housing_data_loan <- housing_data_filtered %>% 
+  group_by(loan_type_name) %>%
+  summarise(loan_count = n()) 
+
+ggplot(housing_data_loan, aes(loan_type_name, loan_count)) +
+  geom_bar(stat = 'identity') + ggtitle("Histogram of Loan Type")+xlab("Loan Type")+ylab("Frequency")
+
+```
+
+6. Bivariate frequency distributions (tables or plots) for key variables
+
+```{r}
+#frequency table for loan type and ethnicity
+factor(housing_data_filtered$applicant_ethnicity_name)
+FreqTable = table(housing_data_filtered$applicant_ethnicity_name,housing_data_filtered$loan_type_name)
+plot(FreqTable)
+
+#frequency table for loan type and gender
+#todo
+
+
+# to observe the relation between loan amount and applicant's income
+plot(housing_data_filtered$loan_amount_000s ~ housing_data_filtered$applicant_income_000s, main="Scatterplot of loan amount and applicant's income",xlab="Income(in thousands)",ylab="Loan Amount(in thousands)")
+
+# bivariate plot for relationship between applicant's income (mean) 
+# and loan amount (mean) by loan type
+housing_data_agg <- aggregate(housing_data_filtered, list(housing_data_filtered$loan_type_name), mean, na.rm=TRUE)
+ggplot(housing_data_agg, aes(applicant_income_000s, loan_amount_000s)) + geom_point() +
+  geom_text(aes(label=housing_data_agg$Group.1))
+
+# bivariate plot for relationship between applicant's income (mean) 
+# and loan amount (mean) by ethnicity
+housing_data_agg <- aggregate(housing_data_filtered, list(housing_data_filtered$applicant_ethnicity_name), mean, na.rm=TRUE)
+ggplot(housing_data_agg, aes(applicant_income_000s, loan_amount_000s)) + geom_point() +
+  geom_text(aes(label=housing_data_agg$Group.1))
+
+```
+
+
+```{r}
+#Corelation between chosen variables: 
+
+
+```
+
+
+
+7. 
+
+Conclusion
+
+
+
