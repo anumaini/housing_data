@@ -2,9 +2,11 @@
 title: "nyc_housing"
 author: "Anubhav Maini"
 date: "February 21, 2018"
-output: html_document
+output:
+  word_document: default
+  html_document: default
 ---
-Anubhav Maini, Eric Moyal, Monica Katoch, Harshil Dwivedi
+Harshil Dwivedi, Monica Katoch, Anubhav Maini & Eric Moyal 
 Marketing Analytics
 Professor Ranjan
 February 21, 2018
@@ -16,23 +18,27 @@ The data problem is what variables are necessary to predict mortgage decisions b
 
 2. Here's how we assessed the dataset: 
 
-```{r eval=FALSE, include=FALSE}
 
+```{r}
 housing_data <- read.csv(file.choose(), header=T)
 library(dplyr)
 library(ggplot2)
 library(tidyr)
+```
 
+
+```{r eval=FALSE, include=FALSE}
 #Understanding the Data 
 names(housing_data)
 summary(housing_data)
 str(housing_data)
 ```
 
-Using sapply to assess class of data and creating a data frame for future reference. 
+
+Using sapply to assess the class of data and creating a data frame for future reference. 
 
 ```{r}
-#Understanding classes of all variables 
+#Understanding classes for all variables 
 
 Variable_names <- data.frame(sapply(housing_data, class))
 Variable_names <- rename(Variable_names, data_class= sapply.housing_data..class.)
@@ -97,7 +103,7 @@ colnames(housing_data) <- Variables
 
 5. Assesing the variables using data vasualization techniques- 
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 #gender filter
 housing_data_filtered <- filter(housing_data,applicant_sex_name =="Male" | applicant_sex_name == "Female") %>% 
   droplevels()
@@ -160,7 +166,7 @@ housing_data_agg <- aggregate(housing_data_filtered, list(housing_data_filtered$
 ggplot(housing_data_agg, aes(applicant_income_000s, loan_amount_000s)) + geom_point() +
   geom_text(aes(label=housing_data_agg$Group.1))
 
-#on working with averages for loan amount and income and factoring the loan type, we notice that conventional loan averages as a factor of mean income and loan are diagnoally dispered in the graph when compared to HS guarenteed. This means that the HS guarenteed applicants have lesser incomes and also apply for lower loan amounts, which in the real word makes sense. We can draw conclusions accordingly for the other two as they lie in between these plots. 
+#on working with averages for the loan amount and income and factoring the loan type, we notice that conventional loan averages as a factor of mean income and loan are diagnoally dispered in the graph when compared to HS guarenteed. This means that the HS guarenteed applicants have lesser incomes and also apply for lower loan amounts, which in the real word makes sense. We can draw conclusions accordingly for the other two as they lie in between these plots. 
 
 # bivariate plot for relationship between applicant's income (mean) 
 # and loan amount (mean) by ethnicity
@@ -173,16 +179,40 @@ ggplot(housing_data_agg, aes(applicant_income_000s, loan_amount_000s)) + geom_po
 
 ```
 
+7. We now understand how the data is spread out on the basis of income, gender, loan amount and ethnicity. We can make some assumptions such as Unfortunately, making assumptions about the probability of the getting the loan approved will require more advanced techniques such as creating models- both linear and r.part based, creating predictions, using bootstrapping techniques to improve these predictions. What we do know is the important variables especially those in the code called ratio(ratio variables). 
 
-```{r}
-#Corelation between chosen variables: 
 
+
+We also know that we can group various collumns. Below is the assessment and the framework for the next step of predictions. This is just an example of how we will asses this data for creating predictive models and create them in the next submission. (only visible in R Markdown file)
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE, paged.print=TRUE}
+### After studying the overall data we need to disect each variable and learn more in groups
+
+##Group 1- Action Taken by Financial Institution
+unique(housing_data[,1:2])
+# we learn that Variables 1 and 2 have 7 levels and indicate the point where the application stands at 
+
+##Group 2- Agency Name 
+unique(housing_data[,3:5])
+#these agencies/Institutions provide the mortgage. There are 6 agencies involved in this data set. Although there may be atleast 9 or more but we use only 6.
+  
+##Group 3- Ethnicity ( Hispanic or Not) 
+unique(housing_data[,6:7]) 
+#Although there are 4 values, these variables indicate whether the applicant is Hispanic or not
+
+##Unique 4- Income of applicants in thousands (IMPORTANT?) 
+unique(housing_data[,8]) 
+
+##Group 5- Race of applicant
+unique(housing_data[,9:18]) 
+#These indicate the racial diversity of the applicant; can be merged in one with hispanic 
+
+### And so on.....
 
 ```
 
 
 
-7. 
+
 
 
 
