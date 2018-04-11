@@ -1,0 +1,817 @@
+---
+title: "Interim Report III- NYC Housing"
+author: "Harshil Dwivedi, Monica Katoch, Anubhav Maini & Eric Moyal"
+date: "April 10, 2018"
+---
+
+Marketing Analytics
+Professor Ranjan
+February 21, 2018
+Git Link- https://github.com/anumaini/housing_data
+
+```{r}
+housing <- read.csv(file.choose(), header=T)
+#install.packages("dplyr")
+#install.packages("ggplot2")
+#install.packages("tidyr")
+#install.packages("corrplot")
+#install.package(usdm)
+#install.package(varhandle)
+library(varhandle)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(corrplot)
+library(modeest)
+library(plm)
+library(reshape)
+```
+
+#1. New York Mortgage Decisions- 
+
+The data problem is what variables are necessary to predict mortgage decisions based on the variables provided in “ny_hmda_2015.csv” such as race, gender, and income. The managerial objective is to obtain an accurate model to predict the outcome of mortgage decisions. Further, we can assess which variables are more pertinent to make this assessment. 
+
+#2.The measurement types of each variable are shown in the following table.
+
+ADD TABLE IN FINAL R MARKDOWN
+
+The variables in the nominal column are all variables with no numerical value. For example,
+property_type has no numerical value, but is rather used to identify the type of property for the loan.There are no ordinal and interval variables as seen in the table. The ratio variables all have numeric significance, such as applicant_income_000s which shows the loan applicants income in the
+thousands. There are variables in the the dataset that are not included in this table because they are repeats of variables already in this table. For example, applicant_sex_name is already in the table as applicant_sex, just in numeric form. This pattern of repeated variables is repeated multiple times in the dataset.
+
+Using sapply to assess the class of data and creating a data frame for future reference. 
+
+#3. Now, we move on to understand the statistics of Data:
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+h.sumstat <- housing[, c(8, 23, 71, 72, 73, 74,75,76,78)]
+variable.nam <- colnames(h.sumstat)
+
+me<-NULL
+sd <- NULL
+IQR <- NULL
+Median <- NULL
+
+for (i in 1:9){ me[i] <- mean(h.sumstat[,i], na.rm=TRUE)
+                       sd[i] <-     sd(h.sumstat[,i], na.rm=TRUE)
+                       IQR[i] <- IQR(h.sumstat[,i], na.rm=TRUE)
+                       Median[i] <- median(h.sumstat[,i], na.rm=TRUE)
+                       
+                      sumstat<- data.frame(cbind(variable.nam,me,sd,IQR,Median))}
+
+sumstat  <- unfactor(sumstat)
+sumstat[,-1] <- round(sumstat[,-1],2)
+colnames(sumstat)[2] <- "mean"
+print(sumstat)
+```
+
+For data that was missing, we added na.rm=TRUE to the IQR() and sd() methods. This omits the
+data from the calculation so the method can accurately calculate the interquartile range and 
+standard deviations. When we use na.rm=TRUE on applicant_income_000s for example it
+removes 61,003 observations. In turn, this emphasizes the other observations more possibly
+skewing our results for summary() and IQR(). We needed to filter these observations because
+otherwise the summary() and IQR() functions would not run. We could put in zeros for the NAs
+but that would skew our results. 
+
+#4. Missing data analysis
+
+ethnicity and gender filter
+```{r}
+h.filtered <- filter(housing,applicant_sex_name =="Male" | applicant_sex_name == "Female") %>%
+ droplevels()
+h.filtered  <- filter(h.filtered, applicant_ethnicity_name == "Not Hispanic or Latino" |
+                         
+                         applicant_ethnicity_name == "Hispanic or Latino") %>%
+  
+  droplevels()
+```
+
+Our data set has many variables with NA values in them and we must check whether the values are important. For all NA values that are not important and can be turned into 0s we will put the code in the appendix. All NA values that cannot just be deleted will be manipulated so that we can control just how much of the data is skewed.
+
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+h.filtered$loan_approval_status <- ifelse(h.filtered$action_taken > 2 & h.filtered$action_taken < 7, 0,1)
+
+```
+
+```{r}
+#Data imputations performed below are on the basis of various correlation tests in appendix, Exhibit-2.
+
+h.filtered$ismissingapplicant_income_000s <-  ifelse(is.na(h.filtered$applicant_income_000s),0,1)
+cor.test(h.filtered$loan_approval_status, h.filtered$ismissingapplicant_income_000s)
+mean(h.filtered$applicant_income_000s, na.rm = TRUE)
+h.filtered$applicant_income_000s[is.na(h.filtered$applicant_income_000s)] <- 134.585
+
+h.filtered$ismissinghud_median_family_income <- ifelse(is.na(h.filtered$hud_median_family_income),0,1)
+cor.test(h.filtered$loan_approval_status, h.filtered$ismissinghud_median_family_income)
+mean(h.filtered$hud_median_family_income, na.rm = TRUE)
+h.filtered$hud_median_family_income[is.na(h.filtered$hud_median_family_income)] <- 78151.31
+
+h.filtered$ismissingloan_amount_000s <-  ifelse(is.na(h.filtered$loan_amount_000s),0,1)
+cor.test(h.filtered$loan_approval_status, h.filtered$loan_amount_000s)
+mean(h.filtered$loan_amount_000s, na.rm = TRUE)
+h.filtered$loan_amount_000s[is.na(h.filtered$loan_amount_000s)] <- 277.43
+
+```
+
+We used the mean values for the above variables because they are all continuous with regards to this assignment. The data we shall analyze bellow is categorical and so our team decided it be best to use the mode to fill in the NA values as that is the most popular answer. Again the reason we are substituting the NA values is because the NA values are significant and if we delete them completely we will tarnish the data. 
+
+```{r}
+h.filtered$ismissingapplicant_race_1 <-  ifelse(is.na(h.filtered$applicant_race_1),0,1)
+cor.test(h.filtered$loan_approval_status, h.filtered$applicant_race_1)
+mlv(h.filtered$applicant_race_1, method = "mfv", na.rm = TRUE)
+h.filtered$applicant_race_1[is.na(h.filtered$applicant_race_1)] <- 5
+h.filtered$applicant_race_2[is.na(h.filtered$applicant_race_2)] <- 5
+h.filtered$applicant_race_3[is.na(h.filtered$applicant_race_3)] <- 5
+h.filtered$co_applicant_race_2[is.na(h.filtered$co_applicant_race_2)] <- 5
+h.filtered$co_applicant_race_1[is.na(h.filtered$co_applicant_race_1)] <- 8
+h.filtered$county_code[is.na(h.filtered$county_code)] <- 103
+h.filtered$agency_code[is.na(h.filtered$agency_code)] <- 9
+
+```
+#5. Assesing the variables using data vasualization techniques- 
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+#histogram of gender
+housing_data_gender <- h.filtered %>% 
+  group_by(applicant_sex_name) %>%
+  summarise(gender_count = n()) 
+
+ggplot(housing_data_gender, aes(applicant_sex_name, gender_count)) +
+  geom_bar(stat = 'identity') +ggtitle("Histogram of Gender")+xlab("Gender")+ylab("Frequency")
+```
+```{r}
+
+#histogram of ethnicity
+housing_data_ethnicity <- h.filtered %>% 
+  group_by(applicant_ethnicity_name) %>%
+  summarise(ethnicity_count = n()) 
+
+ggplot(housing_data_ethnicity, aes(applicant_ethnicity_name, ethnicity_count))+
+  geom_bar(stat = 'identity') + ggtitle("Histogram of Ethnicity")+xlab("Ethnicity")+ylab("Frequency")
+```
+```{r}
+#histogram by loan type
+housing_data_loan <- h.filtered %>% 
+  group_by(loan_type_name) %>%
+  summarise(loan_count = n()) 
+
+ggplot(housing_data_loan, aes(loan_type_name, loan_count)) +
+  geom_bar(stat = 'identity') + ggtitle("Histogram of Loan Type")+xlab("Loan Type")+ylab("Frequency")
+
+```
+Key Insights: 
+From the above histogram we see that most loans (more than 70%) applied are Conventional loans. Rest of the loans are insured by the government programs. The second largest loan type are the loans insured by Federal Housing Administration but the number is very less as compared to the conventional loans. There are a few loans insured by the Department of Veteran Affairs and loans insured by the Department of Agriculture's Rural Housing Service are the least.
+a) There are almost twice as many male applicants than female applicants 
+b) Significantly lower Hispanic or Latino Applicants in the pool( these only factor those who disclosed)
+c) Conventional Loan applications are the highest followed by FHA insured, VA-guaranteed, and FSA/RHS guaranteed 
+
+Bivariate frequency distributions (tables or plots) for key variables
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+#frequency table for loan type and ethnicity
+FreqTable <- table(h.filtered$applicant_ethnicity_name,h.filtered$loan_type_name)
+plot(FreqTable, las = 1)
+```
+For clarification FHA-insured is a loan insured by the Federal Housing Administration. A VA-guarenteed loan is a loan for veterans and a FSA/RHS-guarenteed loan is a loan for farmers and ranchers.  We understand the distribution of data basis ethnicity and loan type. Conventional non Hispanic or Latino applicants are the largest in this data set. Other three loan types follow suit as per the bi-variate Frequecy table. 
+
+To observe the relation between loan amount and applicant's income
+```{r}
+scatter.smooth(x=h.filtered$applicant_income_000s,y=h.filtered$loan_amount_000s, span=2/3,main="Applicant income vs. Loan amount",xlab="Applicant income in Thousands", ylab="Loan amount in Thousands",col="#CCCCCC")
+lines(loess.smooth(h.filtered$applicant_income_000s,h.filtered$loan_amount_000s),lwd="2",col="green")
+```
+
+As you can observe that there is a higher concentration of lower loan amounts as a factor of lower income. Although there are instances where the loan amounts for the same income are higher/audacious(in the real world), these outliers make a small portion of the data.   
+
+Bivariate plot for relationship between loan amount  and loan type
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+ggplot(h.filtered,aes(loan_amount_000s))+geom_density(aes(fill=factor(loan_type_name)),alpha=0.8)+labs(title="Loan Amount for different Loan Types",x="Loan Amount in Thousands",y="Density",fill="Loan Type")+scale_x_continuous(limits = c(0,2000),breaks = seq(0,2000,500))
+```
+From the above graph we can see tha FSA-insured (veteran) loan amounts are clustered below that of the other loans with very little variability, while conventional loans spread well beyond the $500,000 mark and even the $1,000,000 mark. 
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+ggplot(h.filtered,aes(loan_amount_000s))+geom_density(aes(fill=factor(applicant_ethnicity_name)),alpha=0.8)+labs(title="Loan Amount for different Ethnicities",x="Loan Amount In Thousands",y="Density",fill="Ethnicity Type")+scale_x_continuous(limits = c(0, 4500),breaks = seq(0,4500,1000))
+```
+The above graph shows that those with an ethnicity other than Hispanic or Latino have an earlier peak in loan amount, but the range is higher as there are higher comparative peaks in the data by non Hispanic or Latino ethnicities at $1,000,000 and $1,500,000. 
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+ggplot(h.filtered,aes(applicant_income_000s))+geom_density(aes(fill=factor(applicant_ethnicity_name)),alpha=0.8)+labs(title="Applicant Income for different Ethinicities",x="Applicant Income in Thousands",y="Density",fill="Ethnicity Type")+scale_x_continuous(limits = c(0, 1000),breaks = seq(0,1000,250))
+```
+In this graph we observe similar patterns as the previous graph in that applicant income for non Hispanic or Latino people peaks before those of Hispanic or Latino people but then the range is higher as there are higher comparative peaks in the data by non Hispanic or Latino ethnicities when applicant income becomes $250,000 and above.
+
+
+```{r, warning=FALSE}
+##Income distribution of loan origination, taken from https://www.kaggle.com/ambarish/eda-home-mortgage-ny-with-feature-analysis 
+
+breaks = seq(0,400,50)
+h.filtered %>%
+  filter(action_taken_name == "Loan originated" ) %>%
+ggplot(aes(applicant_income_000s)) +
+  scale_x_continuous(limits = c(0, 400),breaks=breaks ) +
+  geom_histogram(binwidth = 10,fill = c("blue")) +
+  labs(x = 'Income in Thousands', y = 'Count', title = 'Loan Originated Applicant Income distribution') 
+```
+
+The data is clearly skewed to the right peaking between $50,000 and $100,000. This shows that most loans originated are for people earning below $100,000 or $150,000 to be safe.The frequency spike in between $100,000 and $150,000 in income is due to the data imputation done earlier and should be ignored.  
+
+#6.
+
+Now we are going to delete variables that are unncessary/repetative in the dataset (see appendix for code. We will now create our Y variable Loan_Approval_Status as our metric checking which loans got approved and which did not. We defined this variable as a loan that received the statuses 1 2 and 7
+
+```{r}
+h.filtered$loan_approval_status <- ifelse(h.filtered$action_taken > 2 & h.filtered$action_taken < 7, 0,1)
+
+```
+
+Loan_Approval was defined by analyzing the action_taken variable in the dataset. There are 7 options for this variable, which are shown in the table above. We looked through all the variables using excel to see which ones had denial reasons and found that “Preapproval request denied by financial institution” and “Application denied by financial institution” both have denial reasons. Additionally, “Application withdrawn by applicant” and “File closed for incompleteness” both cannot be apart of Loan_Approval as they never get a chance to be approved. This leaves us with “Loan originated”, “Application approved but not accepted”, and “Loan purchased by the institution”. 
+
+#7. 
+Comparing Means
+```{r}
+means= h.filtered%>%
+  group_by(loan_approval_status)%>%
+  summarize(Mean=mean(loan_amount_000s))%>%
+  arrange(loan_approval_status)
+means
+
+```
+We can see here that if the loan was not approved the average loan size was 279,397.90 USD, while if it was not approved the average was 276,020.40 USD. There is not a huge difference between the average loan amounts for approved and rejected loans. We will now conduct a t-test to delve deeper into the significance of the loan amount and whether or not it was approved.  
+```{r}
+ttest_approved= h.filtered%>%
+  filter(loan_approval_status==1)
+ttest_not_approved= h.filtered%>%
+  filter(loan_approval_status==0)
+
+t.test(ttest_approved$loan_amount_000s,ttest_not_approved$loan_amount_000s)
+
+```
+We will use an independent two sample t-test. The null hypothesis is that there is a no difference between the mean loan amount for approved and denied loans, while the alternative hypothesis is that there is a differnece between the two means. After running the ttest, we find that the p-value equals 0.0106, which is less than 0.05. Therefore, we  reject the null hypothesis i.e there is a significant difference between loan amounts for rejected and apporved loans.
+
+Chi-Squared Test for income level and loan approval status
+```{r}
+h.filtered$income_level <- ifelse(h.filtered$hud_median_family_income>"70000","High","Low")
+chisq.test(h.filtered$income_level, h.filtered$loan_approval_status)
+
+```
+After conducting the chi squared test, we observe a p value less than 0.05. Therefore, we reject the null hypothesis meaning that the there is a significant difference in loan apporval status for high and low income households. 
+
+#8.
+```{r}
+reg1= lm(h.filtered$loan_approval_status ~ h.filtered$applicant_income_000s+factor(h.filtered$applicant_sex)+factor(h.filtered$applicant_ethnicity)+ h.filtered$loan_amount_000s+h.filtered$applicant_race_1+h.filtered$applicant_race_2+h.filtered$applicant_race_3+factor(h.filtered$agency_code))
+
+summary(reg1)
+```
+
+All other variables that we do not need have been removed, the code is available in Appendix, Exhibit 1 available in the appendix*- 
+
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+h.filtered$action_taken_name = NULL
+h.filtered$agency_abbr = NULL
+h.filtered$agency_name=NULL
+h.filtered$applicant_race_name_1 = NULL
+h.filtered$applicant_race_name_2 = NULL
+h.filtered$applicant_race_name_3 = NULL
+h.filtered$applicant_race_name_4 = NULL
+h.filtered$applicant_race_name_5 = NULL
+h.filtered$application_date_indicator = NULL
+h.filtered$census_tract_number = NULL
+h.filtered$rate_spread = NULL
+h.filtered$co_applicant_race_name_1 = NULL
+h.filtered$co_applicant_race_name_2 = NULL
+h.filtered$co_applicant_race_name_3 = NULL
+h.filtered$co_applicant_race_name_4 = NULL
+h.filtered$co_applicant_race_name_5 = NULL
+h.filtered$denial_reason_name_1 = NULL
+h.filtered$denial_reason_name_2 = NULL
+h.filtered$denial_reason_name_3 = NULL
+h.filtered$edit_status = NULL
+h.filtered$edit_status_name = NULL
+h.filtered$hoepa_status = NULL
+h.filtered$hoepa_status_name = NULL
+h.filtered$lien_status = NULL
+h.filtered$lien_status_name = NULL
+h.filtered$loan_purpose_name = NULL
+h.filtered$loan_type_name = NULL
+h.filtered$respondent_id = NULL
+h.filtered$sequence_number = NULL
+h.filtered$state_code = NULL
+h.filtered$state_abbr = NULL
+h.filtered$state_name = NULL
+h.filtered$co_applicant_race_name_4 = NULL
+h.filtered$co_applicant_race_name_5 = NULL
+h.filtered$denial_reason_name_1 = NULL
+h.filtered$denial_reason_name_2 = NULL
+h.filtered$denial_reason_name_3 = NULL
+h.filtered$msamd = NULL
+h.filtered$msamd_name = NULL
+h.filtered$applicant_sex_name = NULL 
+h.filtered$population = NULL
+h.filtered$co_applicant_ethnicity_name = NULL
+h.filtered$co_applicant_race_name = NULL
+h.filtered$as_of_year = NULL
+h.filtered$denial_reason_1 = NULL
+h.filtered$denial_reason_2 = NULL
+h.filtered$denial_reason_3 = NULL
+h.filtered$ismissing_denial_reason_1 = NULL
+h.filtered$ismissing_denial_reason_2 = NULL
+
+h.filtered <- h.filtered[, !(colnames(h.filtered) %in% c("ismissingapplicant_income_000s","ismissinghud_median_family_income", 
+"ismissingloan_amount_000s", "ismissingapplicant_race_1", "ismissingapplicant_race_2",        
+"ismissingapplicant_race_3", "ismissingapplicant_race_4","ismissingapplicant_race_5",       
+"ismissing_co_applicant_race_5","ismissing_co_applicant_race_4","ismissing_co_applicant_race_3",  "ismissing_co_applicant_race_2","ismissing_co_applicant_race_1","ismissingcounty_code","ismissingagency_cod", "preapproval_name", "purchaser_type_name", "property_type_name","hipreapproval_name","owner_occupancy_name","county_name", "co_applicant_sex_name", "applicant_ethnicity_name", "applicant_race_4", "applicant_race_5", "action_taken"))]
+
+```
+
+9. Training and Validating 
+
+```{r}
+
+housingvec_1 = c(' ','+applicant_income_000s')
+housingvec_2 = c(' ','+county_code')
+housingvec_3 = c(' ','+loan_type')
+housingvec_4 = c(' ','+loan_amount_000s')
+housingvec_5 = c(' ','+applicant_race_1')
+housingvec_6 = c(' ','+applicant_race_2')
+housingvec_7 = c(' ','+applicant_sex')
+housingvec_8 = c(' ','+co_applicant_race_1')
+housingvec_9 = c(' ','+co_applicant_race_2')
+housingvec_10 = c(' ','+loan_purpose')
+
+formulaSet = paste('loan_approval_status~ 1', 
+                   apply( expand.grid(housingvec_1,housingvec_2, 
+                                      housingvec_3,housingvec_4,housingvec_5,
+                                      housingvec_6, #housingvec_7,
+                                      housingvec_8, #housingvec_9
+                                      housingvec_10),1,paste,collapse= ""))
+
+#splitting the data set into training and validation sets 
+set.seed(123)
+train.index<-sample(c(1:dim(h.filtered)[1]),dim(h.filtered)[1]*0.70)
+train.df<-h.filtered[train.index, ] 
+valid.df<-h.filtered[-train.index, ]
+
+
+valid.df.result <- valid.df[28] #dissecting all predictions for residuals
+valid.df <-valid.df[c(-28)] #removing the dependent variable from validation set
+
+
+#training all linear models on training set, train.df
+lm1 <- lapply(1:50, 
+                 function(x){lm(as.formula(formulaSet[x]),
+                                data=train.df)})
+
+#predicting on validation set 
+
+pred1 <- as.data.frame(lapply(1:50, function(x)
+  {predict(lm1[[x]], valid.df)}))
+
+rm(lm1)#remove heavy model to do additional data processing 
+
+
+#We do the same for the other linear models: 
+
+lm2 <- lapply(51:100, 
+                    function(x){lm(as.formula(formulaSet[x]),
+                                   data=train.df)})
+
+pred2 <- as.data.frame(lapply(1:50, 
+                              function(x){predict(lm2[[x]], valid.df)}))
+
+rm(lm2)
+
+
+
+lm3 <- lapply(101:150, 
+                    function(x){lm(as.formula(formulaSet[x]),
+                                   data=train.df)})
+
+
+pred3 <- as.data.frame(lapply(1:50, function(x)
+  {predict(lm3[[x]], valid.df)}))
+
+rm(lm3)
+
+
+
+lm4 <- lapply(151:200, 
+                     function(x){lm(as.formula(formulaSet[x]),
+                                    data=train.df)})
+
+pred4 <- as.data.frame(lapply(1:50, function(x)
+  {predict(lm4[[x]], valid.df)}))
+
+rm(lm4)
+
+lm5 <- lapply(201:256, 
+                     function(x){lm(as.formula(formulaSet[x]),
+                                   data=train.df)})
+  
+
+pred5 <- as.data.frame(lapply(1:56, function(x) {predict(lm5[[x]], valid.df)}))
+
+rm(lm5)
+
+```
+
+
+```{r}
+#Merging all predictions to one 
+
+pred_all <- round(cbind(pred1,pred2,pred3, pred4, pred5))
+
+model_nam <- seq(1, 256, by= 1) #naming models in all_lm_pred
+colnames(pred_all ) <- model_nam
+
+#calculating the MSE
+
+h.filtered.MSE <- data.frame(lapply(1:256,function(x)
+  {(mean((pred_all[x]-valid.df.result)^2))}))
+
+colnames(h.filtered.MSE) <- model_nam
+h.filtered.MSE <- melt(h.filtered.MSE)
+
+best_model <- h.filtered.MSE 
+colnames(best_model)[2] <- "MSE"
+
+best_model$model <- formulaSet
+
+best_model <- best_model%>%
+  arrange(model, desc(MSE))%>%
+  filter(MSE< 0.3668088)
+
+best_model$MSE <- round(best_model$MSE, 4)
+
+lm_best <- lapply(1:5, 
+                     function(x){lm(as.formula(best_model$model[x]),
+                                   data=train.df)})
+
+best_model$adj.r.squared <-round(as.numeric(lapply(1:5,                                     (function(x){
+  summary(lm_best[[x]])$adj.r.squared}))),4)
+
+print(best_model)
+
+```
+
+#10
+
+Our final selected model has “applicant_income_000s", "county_code", "loan_amount_000s","applicant_race_1", "co_applicant_race_1", "loan_purpose” as the independent variables. With this model in mind, our significant customer segments are high and low applicant incomes along with American Indian/ Alaska Native, Asian, African American, and White.  
+
+#11
+
+As mentioned above, we decided to split the applicants' income on the median value = 93( in thousands of $). Also, for applicant_race_1- 1=  American Indian or Alaska Native | 2= Asian | 3= Black or African American | 4= Native Hawaiian or Other Pacific Islander | 5= White | 6= Information not provided/ Others. 
+
+```{r}
+h.filtered_final<- h.filtered
+#First, we will impute the non-segment variables with mode/mean/median.Please refere to Exhibit-3 for mode calculations.
+
+h.filtered_final$county_code <- 103
+h.filtered_final$loan_amount_000s <- 277.3
+h.filtered_final$co_applicant_race_1 <- 8
+h.filtered_final$loan_purpose <- 1
+
+#Spliting the data for predictive analysis-
+
+set.seed(123)
+train.index<-sample(c(1:dim(h.filtered_final)[1]),dim(h.filtered_final)[1]*0.70)
+h.filtered_train <-h.filtered_final[train.index, ] 
+h.filtered_valid <-h.filtered_final[-train.index, ]
+
+h.filtered_valid <-h.filtered_valid[c(-28)] #removing the dependent variable from validation set
+
+#segregating and predicting on the basis segmentwise:
+#For low income and American Indian and Alaska
+
+train_low_aindalaska <- h.filtered_train %>% filter(applicant_income_000s < 93, applicant_race_1 == "1")
+
+valid_low_aindalaska <- h.filtered_valid %>% filter(applicant_income_000s < 93, applicant_race_1 == "1")
+
+pred_low_aindalaska <- mean(predict(lm(loan_approval_status~ 1 +applicant_income_000s+county_code +loan_amount_000s+applicant_race_1 +co_applicant_race_1+loan_purpose, data=train_low_aindalaska),valid_low_aindalaska ))
+
+#For high income and American Indian and Alaska
+train_high_aindalaska <- h.filtered_train %>% filter(applicant_income_000s > 93, applicant_race_1 == "1")
+
+valid_high_aindalaska <- h.filtered_valid %>% filter(applicant_income_000s > 93, applicant_race_1 == "1")
+
+pred_high_aindalaska <- mean(predict(lm(loan_approval_status~ 1 +applicant_income_000s+county_code +loan_amount_000s+applicant_race_1 +co_applicant_race_1+loan_purpose, data=train_high_aindalaska),valid_high_aindalaska))
+
+```
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+###########Similarly we run the analysis for other variables- 
+
+train_low_asian <- h.filtered_train %>% filter(applicant_income_000s < 93, applicant_race_1 == "2")
+
+valid_low_asian <- h.filtered_valid %>% filter(applicant_income_000s < 93, applicant_race_1 == "2")
+
+pred_low_asian <- mean(predict(lm(loan_approval_status~ 1 +applicant_income_000s+county_code +loan_amount_000s+applicant_race_1 +co_applicant_race_1+loan_purpose, data=train_low_asian),valid_low_asian))
+
+##
+
+train_low_black <- h.filtered_train %>% filter(applicant_income_000s < 93, applicant_race_1 == "3")
+
+valid_low_black <- h.filtered_valid %>% filter(applicant_income_000s < 93, applicant_race_1 == "3")
+
+pred_low_black <- mean(predict(lm(loan_approval_status~ 1 +applicant_income_000s+county_code +loan_amount_000s+applicant_race_1 +co_applicant_race_1+loan_purpose, data=train_low_black),valid_low_black))
+
+##
+
+train_low_hawpac <- h.filtered_train %>% filter(applicant_income_000s < 93, applicant_race_1 == "4")
+
+valid_low_hawpac <- h.filtered_valid %>% filter(applicant_income_000s < 93, applicant_race_1 == "4")
+
+pred_low_hawpac <- mean(predict(lm(loan_approval_status~ 1 +applicant_income_000s+county_code +loan_amount_000s+applicant_race_1 +co_applicant_race_1+loan_purpose, data=train_low_hawpac),valid_low_hawpac))
+
+##
+
+train_low_white <- h.filtered_train %>% filter(applicant_income_000s < 93, applicant_race_1 == "5")
+
+valid_low_white <- h.filtered_valid %>% filter(applicant_income_000s < 93, applicant_race_1 == "5")
+
+pred_low_white <- mean(predict(lm(loan_approval_status~ 1 +applicant_income_000s+county_code +loan_amount_000s+applicant_race_1 +co_applicant_race_1+loan_purpose, data=train_low_white),valid_low_white))
+
+##
+
+train_low_noinfo <- h.filtered_train %>% filter(applicant_income_000s < 93, applicant_race_1 == "6")
+
+valid_low_noinfo <- h.filtered_valid %>% filter(applicant_income_000s < 93, applicant_race_1 == "6")
+
+pred_low_noinfo <- mean(predict(lm(loan_approval_status~ 1 +applicant_income_000s+county_code +loan_amount_000s+applicant_race_1 +co_applicant_race_1+loan_purpose, data=train_low_noinfo),valid_low_noinfo))
+
+#######
+
+train_high_asian <- h.filtered_train %>% filter(applicant_income_000s > 93, applicant_race_1 == "2")
+
+valid_high_asian <- h.filtered_valid %>% filter(applicant_income_000s > 93, applicant_race_1 == "2")
+
+pred_high_asian <- mean(predict(lm(loan_approval_status~ 1 +applicant_income_000s+county_code +loan_amount_000s+applicant_race_1 +co_applicant_race_1+loan_purpose, data=train_high_asian),valid_high_asian))
+
+##
+
+train_high_black <- h.filtered_train %>% filter(applicant_income_000s > 93, applicant_race_1 == "3")
+
+valid_high_black <- h.filtered_valid %>% filter(applicant_income_000s > 93, applicant_race_1 == "3")
+
+pred_high_black <- mean(predict(lm(loan_approval_status~ 1 +applicant_income_000s+county_code +loan_amount_000s+applicant_race_1 +co_applicant_race_1+loan_purpose, data=train_high_black),valid_high_black))
+
+##
+
+train_high_hawpac <- h.filtered_train %>% filter(applicant_income_000s > 93, applicant_race_1 == "4")
+
+valid_high_hawpac <- h.filtered_valid %>% filter(applicant_income_000s > 93, applicant_race_1 == "4")
+
+pred_high_hawpac <- mean(predict(lm(loan_approval_status~ 1 +applicant_income_000s+county_code +loan_amount_000s+applicant_race_1 +co_applicant_race_1+loan_purpose, data=train_high_hawpac),valid_high_hawpac))
+
+##
+
+train_high_white <- h.filtered_train %>% filter(applicant_income_000s > 93, applicant_race_1 == "5")
+
+valid_high_white <- h.filtered_valid %>% filter(applicant_income_000s > 93, applicant_race_1 == "5")
+
+pred_high_white <- mean(predict(lm(loan_approval_status~ 1 +applicant_income_000s+county_code +loan_amount_000s+applicant_race_1 +co_applicant_race_1+loan_purpose, data=train_high_white),valid_high_white))
+
+##
+
+train_high_noinfo <- h.filtered_train %>% filter(applicant_income_000s > 93, applicant_race_1 == "6")
+
+valid_high_noinfo <- h.filtered_valid %>% filter(applicant_income_000s > 93, applicant_race_1 == "6")
+
+pred_high_noinfo <- mean(predict(lm(loan_approval_status~ 1 +applicant_income_000s+county_code +loan_amount_000s+applicant_race_1 +co_applicant_race_1+loan_purpose, data=train_high_noinfo),valid_high_noinfo))
+
+```
+
+```{r}
+American_Ind_Alaskan <-rbind( pred_low_aindalaska, pred_high_aindalaska)
+asian <- rbind(pred_low_asian, pred_high_asian)
+black <- rbind(pred_low_black, pred_high_black)
+hawaii_pacific <- rbind(pred_low_hawpac, pred_high_hawpac)
+white <- rbind(pred_low_white, pred_high_white)
+noinfo <- rbind(pred_low_noinfo, pred_high_noinfo)
+  
+best_seg <- as.data.frame(cbind(American_Ind_Alaskan, asian, black, hawaii_pacific, white, noinfo ))
+
+row.names(best_seg) <- c("Low Income", "High Income")
+colnames(best_seg) <- c("American-Indian & Alaskan","Asian", "Black", "Hawaii & Pacific Islander", "White", "No-Info")
+
+best_seg <- round(best_seg, 3)
+best_seg
+
+```
+
+#12. 
+
+
+#Appendix 
+
+
+#Exhibit 1
+
+h.filtered$action_taken_name = NULL
+h.filtered$agency_abbr = NULL
+h.filtered$agency_name=NULL
+h.filtered$applicant_race_name_1 = NULL
+h.filtered$applicant_race_name_2 = NULL
+h.filtered$applicant_race_name_3 = NULL
+h.filtered$applicant_race_name_4 = NULL
+h.filtered$applicant_race_name_5 = NULL
+h.filtered$application_date_indicator = NULL
+h.filtered$census_tract_number = NULL
+h.filtered$rate_spread = NULL
+h.filtered$co_applicant_race_name_1 = NULL
+h.filtered$co_applicant_race_name_2 = NULL
+h.filtered$co_applicant_race_name_3 = NULL
+h.filtered$co_applicant_race_name_4 = NULL
+h.filtered$co_applicant_race_name_5 = NULL
+h.filtered$denial_reason_name_1 = NULL
+h.filtered$denial_reason_name_2 = NULL
+h.filtered$denial_reason_name_3 = NULL
+h.filtered$edit_status = NULL
+h.filtered$edit_status_name = NULL
+h.filtered$hoepa_status = NULL
+h.filtered$hoepa_status_name = NULL
+h.filtered$lien_status = NULL
+h.filtered$lien_status_name = NULL
+h.filtered$loan_purpose_name = NULL
+h.filtered$loan_type_name = NULL
+h.filtered$respondent_id = NULL
+h.filtered$sequence_number = NULL
+h.filtered$state_code = NULL
+h.filtered$state_abbr = NULL
+h.filtered$state_name = NULL
+h.filtered$co_applicant_race_name_4 = NULL
+h.filtered$co_applicant_race_name_5 = NULL
+h.filtered$denial_reason_name_1 = NULL
+h.filtered$denial_reason_name_2 = NULL
+h.filtered$denial_reason_name_3 = NULL
+h.filtered$msamd = NULL
+h.filtered$msamd_name = NULL
+h.filtered$applicant_sex_name = NULL 
+h.filtered$population = NULL
+h.filtered$co_applicant_ethnicity_name = NULL
+h.filtered$co_applicant_race_name = NULL
+h.filtered$as_of_year = NULL
+h.filtered$denial_reason_1 = NULL
+h.filtered$denial_reason_2 = NULL
+h.filtered$denial_reason_3 = NULL
+h.filtered$ismissing_denial_reason_1 = NULL
+h.filtered$ismissing_denial_reason_2 = NULL
+
+h.filtered <- h.filtered[, !(colnames(h.filtered) %in% c("ismissingapplicant_income_000s","ismissinghud_median_family_income", 
+"ismissingloan_amount_000s", "ismissingapplicant_race_1", "ismissingapplicant_race_2",        
+"ismissingapplicant_race_3", "ismissingapplicant_race_4","ismissingapplicant_race_5",       
+"ismissing_co_applicant_race_5","ismissing_co_applicant_race_4","ismissing_co_applicant_race_3",    
+"ismissing_co_applicant_race_2","ismissing_co_applicant_race_1","ismissingcounty_code","ismissingagency_cod", "preapproval_name", "purchaser_type_name", "property_type_name","hipreapproval_name","owner_occupancy_name","county_name", "co_applicant_sex_name", "applicant_ethnicity_name", "applicant_race_4", "applicant_race_5", "action_taken"))]
+
+
+#Exhibit-2.
+
+h.filtered$ismissingapplicant_race_2 <-  ifelse(is.na(h.filtered$applicant_race_2),0,1)
+cor.test(h.filtered$loan_approval_status, h.filtered$ismissingapplicant_race_2)
+mlv(h.filtered$applicant_race_2, method = "mfv", na.rm = TRUE)
+h.filtered$applicant_race_2[is.na(h.filtered$applicant_race_2)] <- 5
+
+
+h.filtered$ismissingapplicant_race_3 <-  ifelse(is.na(h.filtered$applicant_race_3),0,1)
+cor.test(h.filtered$loan_approval_status, h.filtered$ismissingapplicant_race_3)
+mlv(h.filtered$applicant_race_3, method = "mfv", na.rm = TRUE)
+h.filtered$applicant_race_3[is.na(h.filtered$applicant_race_3)] <- 5
+
+h.filtered$ismissingapplicant_race_4 <-  ifelse(is.na(h.filtered$applicant_race_4),0,1)
+cor.test(h.filtered$loan_approval_status, h.filtered$ismissingapplicant_race_4)
+
+h.filtered$ismissingapplicant_race_5 <-  ifelse(is.na(h.filtered$applicant_race_5),0,1)
+cor.test(h.filtered$loan_approval_status, h.filtered$ismissingapplicant_race_5)
+
+h.filtered$ismissing_co_applicant_race_5 <-  ifelse(is.na(h.filtered$co_applicant_race_5),0,1)
+cor.test(h.filtered$loan_approval_status, h.filtered$ismissing_co_applicant_race_5)
+
+h.filtered$ismissing_co_applicant_race_4 <-  ifelse(is.na(h.filtered$co_applicant_race_4),0,1)
+cor.test(h.filtered$loan_approval_status, h.filtered$ismissing_co_applicant_race_4)
+
+h.filtered$ismissing_co_applicant_race_3 <-  ifelse(is.na(h.filtered$co_applicant_race_3),0,1)
+cor.test(h.filtered$loan_approval_status, h.filtered$ismissing_co_applicant_race_3)
+
+h.filtered$ismissing_co_applicant_race_2 <-  ifelse(is.na(h.filtered$co_applicant_race_2),0,1)
+cor.test(h.filtered$loan_approval_status, h.filtered$ismissing_co_applicant_race_2)
+mlv(h.filtered$co_applicant_race_2, method = "mfv", na.rm = TRUE)
+h.filtered$co_applicant_race_2[is.na(h.filtered$applicant_race_2)] <- 5
+
+h.filtered$ismissing_co_applicant_race_1 <-  ifelse(is.na(h.filtered$co_applicant_race_1),0,1)
+cor.test(h.filtered$loan_approval_status, h.filtered$co_applicant_race_1)
+mlv(h.filtered$co_applicant_race_1, method = "mfv", na.rm = TRUE)
+h.filtered$co_applicant_race_1[is.na(h.filtered$applicant_race_1)] <- 8
+
+h.filtered$ismissingcounty_code <-  ifelse(is.na(h.filtered$county_code),0,1)
+cor.test(h.filtered$loan_approval_status, h.filtered$county_code)
+mlv(h.filtered$county_code, method = "mfv", na.rm = TRUE)
+h.filtered$county_code[is.na(h.filtered$county_code)] <- 103
+
+h.filtered$ismissingagency_code <-  ifelse(is.na(h.filtered$agency_code),0,1)
+cor.test(h.filtered$loan_approval_status, h.filtered$agency_code)
+mlv(h.filtered$agency_code, method = "mfv", na.rm = TRUE)
+h.filtered$agency_code[is.na(h.filtered$agency_code)] <- 9
+h.filtered[complete.cases(h.filtered[ ,15:17]),]
+
+
+
+#Exhibit-3 
+
+Code inspired from: https://www.tutorialspoint.com/r/r_mean_median_mode.htm
+
+Create the function.
+
+getmode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+trial<- h.filtered[,c("applicant_income_000s", "county_code", "loan_amount_000s","applicant_race_1", "co_applicant_race_1", "loan_purpose")]
+
+#Calculate the mode using the user function.
+
+getmode(trial$county_code)
+getmode(trial$co_applicant_race_1)
+getmode(trial$loan_purpose)
+
+
+#Exhibit- 4
+
+Similarly we run the analysis for other variables- 
+
+train_low_asian <- h.filtered_train %>% filter(applicant_income_000s < 93, applicant_race_1 == "2")
+
+valid_low_asian <- h.filtered_valid %>% filter(applicant_income_000s < 93, applicant_race_1 == "2")
+
+pred_low_asian <- mean(predict(lm(loan_approval_status~ 1 +applicant_income_000s+county_code +loan_amount_000s+applicant_race_1 +co_applicant_race_1+loan_purpose, data=train_low_asian),valid_low_asian))
+
+##
+
+train_low_black <- h.filtered_train %>% filter(applicant_income_000s < 93, applicant_race_1 == "3")
+
+valid_low_black <- h.filtered_valid %>% filter(applicant_income_000s < 93, applicant_race_1 == "3")
+
+pred_low_black <- mean(predict(lm(loan_approval_status~ 1 +applicant_income_000s+county_code +loan_amount_000s+applicant_race_1 +co_applicant_race_1+loan_purpose, data=train_low_black),valid_low_black))
+
+##
+
+train_low_hawpac <- h.filtered_train %>% filter(applicant_income_000s < 93, applicant_race_1 == "4")
+
+valid_low_hawpac <- h.filtered_valid %>% filter(applicant_income_000s < 93, applicant_race_1 == "4")
+
+pred_low_hawpac <- mean(predict(lm(loan_approval_status~ 1 +applicant_income_000s+county_code +loan_amount_000s+applicant_race_1 +co_applicant_race_1+loan_purpose, data=train_low_hawpac),valid_low_hawpac))
+
+##
+
+train_low_white <- h.filtered_train %>% filter(applicant_income_000s < 93, applicant_race_1 == "5")
+
+valid_low_white <- h.filtered_valid %>% filter(applicant_income_000s < 93, applicant_race_1 == "5")
+
+pred_low_white <- mean(predict(lm(loan_approval_status~ 1 +applicant_income_000s+county_code +loan_amount_000s+applicant_race_1 +co_applicant_race_1+loan_purpose, data=train_low_white),valid_low_white))
+
+##
+
+train_low_noinfo <- h.filtered_train %>% filter(applicant_income_000s < 93, applicant_race_1 == "6")
+
+valid_low_noinfo <- h.filtered_valid %>% filter(applicant_income_000s < 93, applicant_race_1 == "6")
+
+pred_low_noinfo <- mean(predict(lm(loan_approval_status~ 1 +applicant_income_000s+county_code +loan_amount_000s+applicant_race_1 +co_applicant_race_1+loan_purpose, data=train_low_noinfo),valid_low_noinfo))
+
+#######
+
+train_high_asian <- h.filtered_train %>% filter(applicant_income_000s > 93, applicant_race_1 == "2")
+
+valid_high_asian <- h.filtered_valid %>% filter(applicant_income_000s > 93, applicant_race_1 == "2")
+
+pred_high_asian <- mean(predict(lm(loan_approval_status~ 1 +applicant_income_000s+county_code +loan_amount_000s+applicant_race_1 +co_applicant_race_1+loan_purpose, data=train_high_asian),valid_high_asian))
+
+##
+
+train_high_black <- h.filtered_train %>% filter(applicant_income_000s > 93, applicant_race_1 == "3")
+
+valid_high_black <- h.filtered_valid %>% filter(applicant_income_000s > 93, applicant_race_1 == "3")
+
+pred_high_black <- mean(predict(lm(loan_approval_status~ 1 +applicant_income_000s+county_code +loan_amount_000s+applicant_race_1 +co_applicant_race_1+loan_purpose, data=train_high_black),valid_high_black))
+
+##
+
+train_high_hawpac <- h.filtered_train %>% filter(applicant_income_000s > 93, applicant_race_1 == "4")
+
+valid_high_hawpac <- h.filtered_valid %>% filter(applicant_income_000s > 93, applicant_race_1 == "4")
+
+pred_high_hawpac <- mean(predict(lm(loan_approval_status~ 1 +applicant_income_000s+county_code +loan_amount_000s+applicant_race_1 +co_applicant_race_1+loan_purpose, data=train_high_hawpac),valid_high_hawpac))
+
+##
+
+train_high_white <- h.filtered_train %>% filter(applicant_income_000s > 93, applicant_race_1 == "5")
+
+valid_high_white <- h.filtered_valid %>% filter(applicant_income_000s > 93, applicant_race_1 == "5")
+
+pred_high_white <- mean(predict(lm(loan_approval_status~ 1 +applicant_income_000s+county_code +loan_amount_000s+applicant_race_1 +co_applicant_race_1+loan_purpose, data=train_high_white),valid_high_white))
+
+##
+
+train_high_noinfo <- h.filtered_train %>% filter(applicant_income_000s > 93, applicant_race_1 == "6")
+
+valid_high_noinfo <- h.filtered_valid %>% filter(applicant_income_000s > 93, applicant_race_1 == "6")
+
+pred_high_noinfo <- mean(predict(lm(loan_approval_status~ 1 +applicant_income_000s+county_code +loan_amount_000s+applicant_race_1 +co_applicant_race_1+loan_purpose, data=train_high_noinfo),valid_high_noinfo))

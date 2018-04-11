@@ -1,29 +1,27 @@
 ---
-title: "nyc_housing"
-author: "Anubhav Maini"
+title: "Interim Report II- NYC Housing"
+author: "Harshil Dwivedi, Monica Katoch, Anubhav Maini & Eric Moyal"
 date: "February 21, 2018"
-output:
-  word_document: default
-  html_document: default
 ---
-Harshil Dwivedi, Monica Katoch, Anubhav Maini & Eric Moyal 
+
 Marketing Analytics
 Professor Ranjan
 February 21, 2018
 Git Link- https://github.com/anumaini/housing_data
 
-New York Mortgage Decisions 
+1. New York Mortgage Decisions 
 
 The data problem is what variables are necessary to predict mortgage decisions based on the variables provided in “ny_hmda_2015.csv” such as race, gender, and income. The managerial objective is to obtain an accurate model to predict the outcome of mortgage decisions. Further, we can assess which variables are more pertinent to make this assessment. 
 
 2. Here's how we assessed the dataset: 
-
 
 ```{r}
 housing_data <- read.csv(file.choose(), header=T)
 library(dplyr)
 library(ggplot2)
 library(tidyr)
+library(modeest)
+library(plm)
 ```
 
 
@@ -33,7 +31,6 @@ names(housing_data)
 summary(housing_data)
 str(housing_data)
 ```
-
 
 Using sapply to assess the class of data and creating a data frame for future reference. 
 
@@ -54,6 +51,20 @@ factor <- Variable_factor$num
 ```
 
 The table Variable_names explains what each variable type is. And those variables with factors/levels are explained in table Variable_factors.    
+
+```{r}
+#Missing value count: 
+
+housing_data_missing <- data.frame(colSums(is.na(housing_data)))
+colnames(housing_data_missing)[1]<- "Nulls" 
+Variables <- variable.names(housing_data) # saving all variable names
+housing_data_missing$var <- Variables
+housing_data_missing <- housing_data_missing[order(housing_data_missing$Nulls),]
+housing_data_missing
+```
+
+###Add table
+
 
 3. Now, we move on to understand the statistics of Data:
 
@@ -88,18 +99,19 @@ sd(housing_data$tract_to_msamd_income, na.rm=TRUE)
 
 ```
 
-4. We handled missing data in two ways: 
-
-For data that was missing, we added na.rm=TRUE to the IQR() and sd() methods. This omits the data from the calculation so the method can accurately calculate the interquartile range and standard deviations. 
-
-Also, we can convert blanks to NA in the entire data set at the beginning of the beggining of the assessment. 
+4. First we assess the number of missing data in each variable: 
 
 ```{r}
-Variables <- variable.names(housing_data) # converting all variable names to  
-housing_data <- data.frame(ifelse(housing_data %in% c(""," ","NA"), NA, housing_data))#Treating blanks and reconverting list to Data Frame 
-# renaming the strings
-colnames(housing_data) <- Variables  
+#Missing value count: 
+housing_data_missing <- data.frame(colSums(is.na(housing_data)))
+colnames(housing_data_missing)[1]<- "Nulls" 
+Variables <- variable.names(housing_data) # saving all variable names
+housing_data_missing$var <- Variables
+housing_data_missing <- housing_data_missing[order(housing_data_missing$Nulls),]
+housing_data_missing
 ```
+
+When we use na.rm=TRUE on applicant_income_000s for example it removes 61,003 observations. In turn, this emphasises the other observations more possibly skewing our results for summary() and IQR(). We needed to filter these observations because otherwise the summary() and IQR() functions would not run. We could put in zeros for the NAs but that would definitely skew our results. 
 
 5. Assesing the variables using data vasualization techniques- 
 
@@ -146,7 +158,7 @@ a) There are almost twice as many male applicants than female applicants
 b) Significantly lower Hispanic or Latino Applicants in the pool( these only factor those who disclosed)
 c) Conventional Loan applications are the highest followed by FHA insured, VA-guaranteed, and FSA/RHS guaranteed 
 
-6. Bivariate frequency distributions (tables or plots) for key variables
+Bivariate frequency distributions (tables or plots) for key variables
 
 ```{r}
 #frequency table for loan type and ethnicity
@@ -166,7 +178,7 @@ housing_data_agg <- aggregate(housing_data_filtered, list(housing_data_filtered$
 ggplot(housing_data_agg, aes(applicant_income_000s, loan_amount_000s)) + geom_point() +
   geom_text(aes(label=housing_data_agg$Group.1))
 
-#on working with averages for the loan amount and income and factoring the loan type, we notice that conventional loan averages as a factor of mean income and loan are diagnoally dispered in the graph when compared to HS guarenteed. This means that the HS guarenteed applicants have lesser incomes and also apply for lower loan amounts, which in the real word makes sense. We can draw conclusions accordingly for the other two as they lie in between these plots. 
+#On working with averages for the loan amount and income and factoring the loan type, we notice that conventional loan averages as a factor of mean income and loan are diagnoally dispered in the graph when compared to HS guarenteed. This means that the HS guarenteed applicants have lesser incomes and also apply for lower loan amounts, which in the real word makes sense. We can draw conclusions accordingly for the other two as they lie in between these plots. 
 
 # bivariate plot for relationship between applicant's income (mean) 
 # and loan amount (mean) by ethnicity
@@ -175,44 +187,239 @@ housing_data_agg <- aggregate(housing_data_filtered, list(housing_data_filtered$
 ggplot(housing_data_agg, aes(applicant_income_000s, loan_amount_000s)) + geom_point() +
   geom_text(aes(label=housing_data_agg$Group.1))
 
-#on doing a similar analysis as above between income and loans on the basis of ethnicity, we learn that those applicants who identify as Hispanic or Latino have lower incomes and apply for high loan amounts. The contrary is observed for those who did not identify with this ethnicity.
+#On doing a similar analysis as above between income and loans on the basis of ethnicity, we learn that those applicants who identify as Hispanic or Latino have lower incomes and apply for high loan amounts. The contrary is observed for those who did not identify with this ethnicity.
 
 ```
 
-7. We now understand how the data is spread out on the basis of income, gender, loan amount and ethnicity. Making assumptions about the probability of the getting the loan approved will require more advanced techniques such as creating models- both linear and r.part based, creating predictions, using bootstrapping techniques to improve these predictions. What we do know is the important variables especially those in the code called ratio(ratio variables). 
+```{r}
+##Income distribution of loan origination, taken from https://www.kaggle.com/ambarish/eda-home-mortgage-ny-with-feature-analysis 
+
+breaks = seq(0,400,50)
+housing_data %>%
+  filter(action_taken_name == "Loan originated" ) %>%
+ggplot(aes(applicant_income_000s)) +
+  scale_x_continuous(limits = c(0, 400),breaks=breaks ) +
+  geom_histogram(binwidth = 10,fill = c("red")) +
+  labs(x = 'Income in Thousands', y = 'Count', title = 'Loan Originated Applicant Income distribution') 
+```
+
+The data is clearly skewed to the right peaking between $50,000 and $100,000. This shows that most loans originated are for people earning below $100,000 or $150,000 to be safe.
+
+6. 
+
+##ADD table
+
+Loan_Approval was defined by analyzing the action_taken variable in the dataset. There are 7 options for this variable, which are shown in the table above. We looked through all the variables using excel to see which ones had denial reasons and found that “Preapproval request denied by financial institution” and “Application denied by financial institution” both have denial reasons. Additionally, “Application withdrawn by applicant” and “File closed for incompleteness” both cannot be apart of Loan_Approval as they never get a chance to be approved. This leaves us with “Loan originated”, “Application approved but not accepted”, and “Loan purchased by the institution”. 
+
+Adding a new variable, loan_approval
+
+```{r}
+housing_data$loan_approval <- ifelse((housing_data$action_taken== c(1 | 2 | 6)),1,0) #We added another variable in Q7. loan_approval_status, which is numeric and not a factor:
+housing_data$loan_approval <- as.factor(housing_data$loan_approval)
+```
+
+7. Before running a t-test, a bit data pre-processing:
+
+```{r}
+#gender filter
+housing_data <- filter(housing_data,applicant_sex_name =="Male" | applicant_sex_name == "Female") %>%
+ 
+  droplevels()
+
+#ethnicity filter
+housing_data <- filter(housing_data,
+                  	
+                  	applicant_ethnicity_name == "Not Hispanic or Latino" |
+                    	
+                    	applicant_ethnicity_name == "Hispanic or Latino") %>%
+ 
+  droplevels()
+housing_data$hud_median_family_income_level <-  ifelse(is.na(housing_data$hud_median_family_income),0,1)
+cor(housing_data$loan_amount_000s,housing_data$hud_median_family_income_level)
+
+#we see here that the N/A values in hud_median_family_income_level are significant with regards to the dataset and so we cannot delete it. Therefore we find the mean of the variable and assign it to all the na values.
+
+mean(housing_data$hud_median_family_income,  na.rm=TRUE)
 
 
+#We will now turn all the NA values into the $78152.51
+housing_data$hud_median_family_income[is.na(housing_data$hud_median_family_income)] <- 78152.51
+mean(housing_data$hud_median_family_income)
+summary(housing_data$hud_median_family_income)
 
-We also know that we can group various collumns. Below are the assessment and the framework for the next step of predictions. This is just an example of how we will asses this data for creating predictive models and create them in the next submission. (only visible in R Markdown file)
-```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE, paged.print=TRUE}
-### After studying the overall data we need to disect each variable and learn more in groups
+#dont need the new hud variable that we created
+housing_data$loan_approval_status <- ifelse(housing_data$action_taken > "2" & housing_data$action_taken < "7",0,1)
+mean(housing_data$loan_approval_status)
 
-##Group 1- Action Taken by Financial Institution
-unique(housing_data[,1:2])
-# we learn that Variables 1 and 2 have 7 levels and indicate the point where the application stands at 
+#a quick note is that we see 62% of loans in which a positive action was taken ended up being approved!
 
-##Group 2- Agency Name 
-unique(housing_data[,3:5])
-#these agencies/Institutions provide the mortgage. There are 6 agencies involved in this data set. Although there may be atleast 9 or more but we use only 6.
-  
-##Group 3- Ethnicity ( Hispanic or Not) 
-unique(housing_data[,6:7]) 
-#Although there are 4 values, these variables indicate whether the applicant is Hispanic or not
+housing_data$applicant_income_000s_level <-  ifelse(is.na(housing_data$applicant_income_000s),0,1)
+cor(housing_data$hud_median_family_income, housing_data$applicant_income_000s_level)
+cor.test(housing_data$hud_median_family_income, housing_data$applicant_income_000s_level)
 
-##Unique 4- Income of applicants in thousands (IMPORTANT?) 
-unique(housing_data[,8]) 
+#why is median income and applicant income negatively correlated?
+mean(housing_data$applicant_income_000s, na.rm =TRUE)
+housing_data$applicant_income_000s[is.na(housing_data$applicant_income_000s)] <- 134.4624
+summary(housing_data$applicant_income_000s)
+unique(housing_data$applicant_race_1)
+unique(housing_data$applicant_race_2)
+housing_data$applicant_race_2_level <- ifelse(is.na(housing_data$applicant_race_2), 0,1)
+cor.test(housing_data$hud_median_family_income, housing_data$applicant_race_2_level)
+unique(housing_data$applicant_race_3)
+mean(housing_data$applicant_race_3, na.rm =TRUE)
+mlv(housing_data$applicant_race_2, method = "mfv", na.rm = TRUE)
+housing_data$applicant_race_2[is.na(housing_data$applicant_race_2)] <- 5
+cor.test(housing_data$hud_median_family_income, housing_data$applicant_race_2)
+unique(housing_data$applicant_race_3)
+cor.test(housing_data$hud_median_family_income, housing_data$applicant_race_3)
+mlv(housing_data$applicant_race_3, method = "mfv", na.rm = TRUE)
+housing_data$applicant_race_3[is.na(housing_data$applicant_race_3)] <- 5
+cor.test(housing_data$hud_median_family_income, housing_data$applicant_race_3)
+unique(housing_data$applicant_race_4)
+cor.test(housing_data$hud_median_family_income, housing_data$applicant_race_4)
+mlv(housing_data$applicant_race_4, method = "mfv", na.rm = TRUE)
+housing_data$applicant_race_4[is.na(housing_data$applicant_race_4)] <- 4
+cor.test(housing_data$hud_median_family_income, housing_data$applicant_race_5)
+mlv(housing_data$applicant_race_5, method = "mfv", na.rm = TRUE)
+housing_data$applicant_race_5[is.na(housing_data$applicant_race_5)] <- 5
 
-##Group 5- Race of applicant
-unique(housing_data[,9:18]) 
-#These indicate the racial diversity of the applicant; can be merged in one with hispanic 
-
-### And so on.....
+#Each race variable is significant; hence, we couldnt delete the Na's;therefore, the race variable may skew our model's inference/prediction. 
 
 ```
 
 
 
+```{r}
+#t-test by adding a column for loan approval
+housing_data$loan_approval_status <- ifelse(housing_data$action_taken > "2" & housing_data$action_taken < "7",0,1)
+t.test(housing_data$loan_amount_000s~housing_data$loan_approval_status)
+t.test(housing_data$loan_approval_status,housing_data$income_level)
+
+#Both the loan amount and income level are significant as the p values from the t test are extremely low, which is why these should be in our models.
+```
+
+8. 
+
+```{r}
+housing_data$loan_approval_status <- ifelse(housing_data$action_taken > "2" & housing_data$action_taken < "7",0,1)
+housing_data$income_level <-  ifelse(housing_data$hud_median_family_income > "70000","High","Low")
+housing_data$ethnicity_name_factor <- as.factor(housing_data$applicant_ethnicity_name)
+housing_data$sex_name_factor <- as.factor((housing_data$applicant_sex_name))
+
+# To aid our analysis, We have divided the income between high and low;all income  above 70K is high income.
+
+#multi-variable analysis
+sex_name_factor <- as.factor((housing_data$applicant_sex_name))
+ethnicity_name_factor <- as.factor(housing_data$applicant_ethnicity_name)
+
+t.test(housing_data$loan_amount_000s, housing_data$applicant_sex)
+t.test(housing_data$loan_approval_status, housing_data$applicant_sex)
+
+# 1 = Female so we see that not only are men more likely to get their loans approved but we also see that Men are getting larger loan amounts
+housing_data$applicant_ethnicity_name_factor <- as.factor(housing_data$applicant_ethnicity_name)
+
+#regression 1
+regr1 <- lm(loan_approval_status ~ income_level+sex_name_factor+ +ethnicity_name_factor+ loan_amount_000s+applicant_race_1+applicant_race_2+applicant_race_3+applicant_race_4+applicant_race_5,  data=housing_data)
+
+summary(regr1)
+
+#Our regression shows us some insightful statistics. First off we see that low income increases your likelihood of getting a loan approved by 4%. Whereas not being Latino gives you a 10% increase in getting loan approval.
+
+#Race is also an important variable we see that those with who put in a 5th race are 10% more likely to get a loan all else being equal. Finally being a male gives you a little less than a 1% increase in getting your loan approved.
+
+#While this regression tells us a little about each of the demographic numbers there are still a few factors we have not yet looked at.
+
+#lets take a look at the agency people used and the region where they applied for their loans
+unique(housing_data$agency_code)
+unique(housing_data$county_code)
+mlv(housing_data$county_code, method = "mfv", na.rm = TRUE)
+housing_data$county_code[is.na(housing_data$county_code)] <- 103
+unique(housing_data$county_code)
+housing_data$county_code <- as.factor(housing_data$county_code)
+
+#For the second regression 
+
+regr2 <- lm( loan_approval_status ~ income_level+county_code+agency_code+sex_name_factor+ethnicity_name_factor+applicant_race_1+applicant_race_2+applicant_race_3+applicant_race_4+applicant_race_5,  data=housing_data)
+
+summary(regr2)
+
+#regression 2 shows us that the agency used will decrease the chances of loan approval by 2% while and depending on where you live you could be up to 62% less likely to get a loan! This is a ridiculous number
+```
+
+9. 
+
+```{r}
+
+# Dropping variables from regression 1
+regr1_a <- lm(loan_approval_status ~ income_level+sex_name_factor+ethnicity_name_factor+ loan_amount_000s + applicant_race_1+applicant_race_2+applicant_race_3+applicant_race_4,  data=housing_data)
+
+summary(regr1) # R squared- 0.008379 for benchamarking 
+summary(regr1_a) # R squared- 0.006577 since R squared dropped income_level is a  benefits our model 
+#R squared without income_level - 0.008366 doesn't change significantly and we may eliminate it but we will keep it as we feel its a necessary factor for our model 
+#R squared without ethnicity_name_facto- 0.005567 since R squared dropped ethnicity_name_factor benefits our model 
+#R squared without loan_amount_000s- 0.008212 doesn't change significantly and we may eliminate it but we will keep it as we feel its a necessary factor for our model
+#R squared- 0.005998 since R squared dropped applicant_race_1 is a  benefits our model 
+#R squared without applicant_race_2- 0.008262 doesn't change significantly and we may eliminate it but we will keep it as we feel its a necessary factor for our model
+#R squared without applicant_race_3- 0.008366 doesn't change significantly and we may eliminate it but we will keep it as we feel its a necessary factor for our model
+#R squared without applicant_race_4- 0.008378 doesn't change significantly and we may eliminate it but we will keep it as we feel its a necessary factor for our model
+#R squared without applicant_race_5- 0.008377 doesn't change significantly and we may eliminate it but we will keep it as we feel its a necessary factor for our model
+
+#In conclusion, we dedided that the overall change in R-squared was significant in most variables and dropping one doesn'tsignificantly increase the R-squared. Even the ones that don't show much change in R-squared such as income_level, loan amount and a few applicant_race variables these showed significance to the model in the summary statistic; also, applicant race from 1 to 5 are linked; hence, we decided not to drop any variable from this model. Now, we will recreate this analysis for the second regression.
 
 
+regr2_a <- lm( loan_approval_status ~ county_code+agency_code+sex_name_factor+ethnicity_name_factor+applicant_race_1+applicant_race_2+applicant_race_3+applicant_race_4+applicant_race_5,  data=housing_data)
+regr2_b <- lm( loan_approval_status ~ income_level+agency_code+sex_name_factor+ethnicity_name_factor+applicant_race_1+applicant_race_2+applicant_race_3+applicant_race_4+applicant_race_5,  data=housing_data)
+regr2_c <- lm( loan_approval_status ~ income_level+county_code+sex_name_factor+ethnicity_name_factor+applicant_race_1+applicant_race_2+applicant_race_3+applicant_race_4+applicant_race_5,  data=housing_data)
+regr2_d <- lm( loan_approval_status ~ income_level+county_code+agency_code+ethnicity_name_factor+applicant_race_1+applicant_race_2+applicant_race_3+applicant_race_4+applicant_race_5,  data=housing_data)
+regr2_e <- lm( loan_approval_status ~ income_level+county_code+agency_code+sex_name_factor+applicant_race_1+applicant_race_2+applicant_race_3+applicant_race_4+applicant_race_5,  data=housing_data)
+regr2_f <- lm( loan_approval_status ~ income_level+county_code+agency_code+sex_name_factor+ethnicity_name_factor+applicant_race_2+applicant_race_3+applicant_race_4+applicant_race_5,  data=housing_data)
+regr2_g <- lm( loan_approval_status ~ income_level+county_code+agency_code+sex_name_factor+ethnicity_name_factor+applicant_race_1+applicant_race_3+applicant_race_4+applicant_race_5,  data=housing_data)
+regr2_h <- lm( loan_approval_status ~ income_level+county_code+agency_code+sex_name_factor+ethnicity_name_factor+applicant_race_1+applicant_race_2+applicant_race_4+applicant_race_5,  data=housing_data)
+regr2_i <- lm( loan_approval_status ~ income_level+county_code+agency_code+sex_name_factor+ethnicity_name_factor+applicant_race_1+applicant_race_2+applicant_race_3+applicant_race_5,  data=housing_data)
+regr2_j <- lm( loan_approval_status ~ income_level+county_code+agency_code+sex_name_factor+ethnicity_name_factor+applicant_race_1+applicant_race_2+applicant_race_3+applicant_race_4,  data=housing_data)
+summary(regr2_a)
+summary(regr2_b)
+summary(regr2_c)
+summary(regr2_d)
+summary(regr2_e)
+summary(regr2_f)
+summary(regr2_g)
+summary(regr2_h)
+summary(regr2_i)
+summary(regr2_j)
+
+#Once again we tested the model by taking one varible out and comparing the r squared values. With income level the r sqared went up slightly but we feel this is a neccesary varible to have in our model still. We used this methodolgy with every varible in the model and decided to keep all of them except county code as the r squared value went up without it. We are noting that r squared values in the regressions without applicant_race_3, applicant_race_4, applicant_race_5 are not that different or even the same, but all the applicant_race_1 through applicant_race_5 are linked so we felt it is necessary to keep all of them, especially because each variable only covers a specific race as mentioned earlier. 
+
+```
 
 
+Now that we have done a variable elmination, its time to compare the models overall. we already knew that regression 2 had a higher R-squared and perhaps was a better model. 
+#Now, after removing county code, we are certain that regression 2 is gives a better model and a higher R-squared overall. 
+
+
+10. 
+
+
+```{r}
+
+regr2_improved <- lm( loan_approval_status ~ income_level+agency_code+sex_name_factor+ethnicity_name_factor+applicant_race_1+applicant_race_2+applicant_race_3+applicant_race_4+applicant_race_5,  data=housing_data)
+
+summary(regr2_improved)
+
+# After looking at the improved models' summary statistics, we learnt that the higher beta values for variables that deal with being hipanic or latino and the applicants' race are important demographic variables. 
+
+
+```
+
+11. We first conclude that Model/Regression 2 perfoms better. The even improved version of the model uses the variables income_level+agency_code+sex_name_factor+ethnicity_name_factor+applicant_race_1+applicant_race_2+applicant_race_3+applicant_race_4+applicant_race_5.
+
+When it comes to predicting loan approvals we can estimate that-
+
+1) low income increases your probability of getting a loan approved by 4%. 
+2) Not being Latino gives you a 10% increase in getting loan approval.
+3) Race is also an important variable we see that those with who put in a 5th race are 10% more likely to get a loan all else being equal. 
+4) Being a male gives you a little less than a 1% increase in getting your loan approved.
+5) The agency used will decrease the chances of loan approval by 2% while 
+6) Depending on where you live you could be up to 62% less likely to get a loan! This is a ridiculous number and after a thorough analysis we dropped this variable. 
+
+We can now use this model's variables to run predictive analysis and tweak it further or use a different regression model such as r.parts, KNN with factor analysis etc.. to know which may be the best fit. 
